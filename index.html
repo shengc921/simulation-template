@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<head>
+    <title>规则怪谈？</title>
+    <meta charset="utf-8">
+
+</head>
+<style>
+    html, body{
+        height: 100%;
+        margin: 0;
+    }
+    body{
+        display: flex;
+        flex-direction: column;
+        color: white;
+        background-image: url(Bespectacled\ Scholar\ in\ Blue\ Lecture\ Hall.png);
+        background-attachment: fixed;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .character-img{
+        position: fixed;
+        bottom: calc(32% + 30px);
+        left: 50%;
+        transform: translateX(-50%);
+        max-height: 68vh;
+        z-index: 1;
+        pointer-events: none;
+    }
+    .textbox{
+        border: 1px solid white;
+        width: 80%;
+        position: fixed;
+        bottom: 30px;
+        height: 32%;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: left;
+        background: rgba(0,0,0,0.5);
+        z-index: 2;
+    }
+    .character_id{
+        display:flex;
+        align-items: center;
+        border: 1px solid white;
+        border-radius: 35px;
+        padding: 15px;
+        width: 5%;
+        justify-content:center ;
+    }
+    .audio{
+        display:none ;
+    }
+    .text{
+        padding: 35px;
+        white-space: pre-line;
+    }
+    .dialogue-content{
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px 0;
+    }
+    .choices{
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 35px 10px 35px;
+    }
+    .choice-btn{
+        padding: 8px;
+        border: 1px solid white;
+        border-radius: 15px;
+        background: rgba(0,0,0,0.6);
+        color: white;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .choice-btn:hover{
+        background: rgba(255,255,255,0.2);
+    }
+    .hidden{
+        display: none;
+    }
+    .nav-buttons{
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-right: 20px;
+    }
+    .nav-btn{
+        width: 40px;
+        height: 40px;
+        border: 1px solid white;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.6);
+        color: white;
+        font-size: 18px;
+        cursor: pointer;
+    }
+    .nav-btn:hover:not(:disabled){
+        background: rgba(255,255,255,0.2);
+    }
+    .nav-btn:disabled{
+        opacity: 0.3;
+        cursor: default;
+    }
+    .affection{
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        border: 1px solid white;
+        border-radius: 15px;
+        padding: 10px 20px;
+        background: rgba(0,0,0,0.5);
+        font-size: 16px;
+        z-index: 3;
+    }
+    .heart-filled{
+        color: #ff4d6d;
+    }
+    .heart-empty{
+        color: rgba(255,255,255,0.3);
+    }
+    .lang-switch{
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        display: flex;
+        border: 1px solid white;
+        border-radius: 15px;
+        overflow: hidden;
+        background: rgba(0,0,0,0.5);
+        z-index: 3;
+    }
+    .lang-btn{
+        border: none;
+        background: transparent;
+        color: white;
+        padding: 10px 16px;
+        font-size: 14px;
+        cursor: pointer;
+    }
+    .lang-btn.active{
+        background: rgba(255,255,255,0.25);
+        font-weight: bold;
+    }
+    .lang-btn:hover:not(.active){
+        background: rgba(255,255,255,0.1);
+    }
+</style>
+<body>
+
+    <audio controls loop autoplay class="audio">
+        <source src="eerie_empty_classroom_ambience.mp3" type="audio/mp3">
+    </audio>
+
+    <div class="lang-switch" id="langSwitch">
+        <button class="lang-btn active" id="langZh" data-lang="zh">中文</button>
+        <button class="lang-btn" id="langEn" data-lang="en">EN</button>
+    </div>
+
+    <div class="affection"><span id="affectionLabel">好感度</span>: <span id="affectionValue"></span></div>
+
+    <img class="character-img" id="characterImg" src="" alt="">
+
+    <fieldset class="textbox" id="textbox">
+        <legend class="character_id" id="speaker">? ? ?</legend>
+        <div class="dialogue-content">
+            <p class="text" id="text"></p>
+            <div class="choices hidden" id="choices"></div>
+        </div>
+        <div class="nav-buttons">
+            <button class="nav-btn" id="prevBtn">&lt;</button>
+            <button class="nav-btn" id="nextBtn">&gt;</button>
+        </div>
+    </fieldset>
+
+</body>
+<script>
+    // 每一句台词 / 选项都用 { zh, en } 存两种语言，渲染时按当前 lang 取值
+    const t = (zh, en) => ({ zh, en });
+
+    // 剧情节点图：每个节点有台词(speaker/line)，
+    // 要么有 next（点击继续到下一条），要么有 choices（玩家做选择）
+    const story = {
+        n1:  { speaker: '? ? ?', line: t('乖乖呆在我身边学微积分不好吗', "Why don't you just stay by my side and study calculus with me?"), next: 'n2' },
+        n2:  { speaker: '? ? ?', line: t('我对你那么好', "I'm so good to you."), next: 'n3' },
+        n3:  { speaker: '? ? ?', line: t('为什么...', 'Why...'), next: 'n4' },
+        n4:  { speaker: '? ? ?', line: t('总要想着逃课呢...', '...do you always think about skipping class...'), next: 'n5' },
+        n5:  { speaker: '? ? ?', line: t('是不是只有把你锁起来，你才能乖乖去学微积分...', "Is locking you up the only way to make you study calculus obediently..."), next: 'n6' },
+        n6:  { speaker: '? ? ?', line: t('又躲到哪里去了呢...', 'Where are you hiding this time...'), next: 'n7' },
+        n7:  { speaker: '? ? ?', line: t('不要再白费力气了...', 'Stop wasting your energy...'), next: 'n8' },
+        n8:  { speaker: '? ? ?', line: t('你逃不掉的...', "You can't escape..."), next: 'n9' },
+        n9:  { speaker: '? ? ?', line: t('抓到你了...', 'Got you...'), next: 'n10' },
+
+        n10: { speaker: '? ? ?', line: t('我们开始吧。', "Let's begin."), next: 'n11' },
+        n11: { speaker: '? ? ?', line: t('第一题。求 ∫₀^∞ e^(-2x)|sin x| dx (x≥0)', 'Question one. Evaluate ∫₀^∞ e^(-2x)|sin x| dx (x≥0)'), next: 'n12' },
+        n12: {
+            speaker: '? ? ?',
+            line: t('怎么回事，你为什么一脸不情愿的样子呢？是我的课不怎么让你感兴趣嘛', "What's wrong? Why do you look so unwilling? Is my class not interesting enough for you?"),
+            choices: [
+                { text: t('没有...老师，我很愿意学。', "No... teacher, I'm happy to learn."), next: 'a1' },
+                { text: t('我只是想回家而已...', 'I just want to go home...'), next: 'b1' }
+            ]
+        },
+
+        // 分支 A：顺从
+        a1: { speaker: '? ? ?', line: t('（露出笑容）这就对了。', "(smiling) That's more like it."), next: 'a2', affection: 1 },
+        a2: { speaker: '? ? ?', line: t('乖学生是不会想着逃跑的。', 'A good student never thinks about running away.'), next: 'a3', affection: -2 },
+        a3: { speaker: '? ? ?', line: t('来，这道题的答案是什么？', "Now, what's the answer to this question?"), next: 'a4' },
+        a4: {
+            speaker: '? ? ?',
+            line: t('说出你的答案。', 'Tell me your answer.'),
+            choices: [
+                { text: t('结果为 1/5', 'The result is 1/5'), next: 'a4_correct' },
+                { text: t('结果为 1/2', 'The result is 1/2'), next: 'a4_wrong' }
+            ]
+        },
+        a4_correct: { speaker: '? ? ?', line: t('......很好，看来我"教"的不错。', "...Good. Looks like my \"teaching\" isn't bad at all."), next: 'loop_next' },
+        a4_wrong: { speaker: '? ? ?', line: t("......不对哦，看来老师需要让你进行一些印象更'深刻'的教学了", "...Wrong. Looks like I need to give you a more \"memorable\" lesson."), next: 'loop_next', affection: -2 },
+
+        // 分支 B：反抗
+        b1: { speaker: '? ? ?', line: t('（笑容消失）回家？', '(smile fades) Home?'), next: 'b2', affection: -2 },
+        b2: { speaker: '? ? ?', line: t('为什么要回家 ？', 'Why would you want to go home?'), next: 'b3' },
+        b3: { speaker: '? ? ?', line: t('这里不就是你的家吗？', "Isn't this your home now?"), next: 'b4' },
+        b4: { speaker: '? ? ?', line: t('这里有我...有微积分...这些难道还不够吗？', "You have me here... and calculus... isn't that enough?"), next: 'b5' },
+        b5: { speaker: '? ? ?', line: t('来，这道题的答案是什么？', "Now, what's the answer to this question?"), next: 'b6' },
+        b6: {
+            speaker: '? ? ?',
+            line: t('说出你的答案。', 'Tell me your answer.'),
+            choices: [
+                { text: t('结果为 1/5', 'The result is 1/5'), next: 'b6_correct' },
+                { text: t('结果为 1/2', 'The result is 1/2'), next: 'b6_wrong' }
+            ]
+        },
+        b6_correct: { speaker: '? ? ?', line: t('......很好，看来我"教"的不错..', "...Good. Looks like my \"teaching\" isn't bad at all."), next: 'loop_next', affection: 1 },
+        b6_wrong: { speaker: '? ? ?', line: t("......不对哦，看来老师需要让你进行一些印象更'深刻'的教学了", "...Wrong. Looks like I need to give you a more \"memorable\" lesson."), next: 'loop_next', affection: -1 },
+
+        // 两条分支汇合，进入第二场
+        loop_next: { speaker: '? ? ?', line: t('下一题，我们继续。', "Next question, let's continue."), next: 'n13' },
+
+        // ===== 第二场：第二题 =====
+        n13: { speaker: '? ? ?', line: t('第二题。求 lim(x→0) (1-cos x)/x²', 'Question two. Evaluate lim(x→0) (1-cos x)/x²'), next: 'n14' },
+        n14: { speaker: '? ? ?', line: t('（停顿）你的眼神...好像在想别的事情。', '(pause) Your eyes... seem to be thinking about something else.'), next: 'n15' },
+        n15: {
+            speaker: '? ? ?',
+            line: t('是在想什么呢？', 'What are you thinking about?'),
+            choices: [
+                { text: t('我在认真思考怎么解这道题。', "I'm seriously thinking about how to solve this."), next: 'c1' },
+                { text: t('……（沉默不说话）', '...(silence)'), next: 'd1' }
+            ]
+        },
+
+        // 分支C：伪装配合
+        c1: { speaker: '? ? ?', line: t('（怀疑）真的吗', '(doubtful) Really?'), next: 'c2', affection: 1 },
+        c2: { speaker: '? ? ?', line: t('那你为什么眼神一直在往门口看？', 'Then why do your eyes keep drifting to the door?'), next: 'c3' },
+        c3: { speaker: '? ? ?', line: t('（低语）是不是想出去呢。', '(whispering) Do you want to go outside?'), next: 'c4', affection: -1 },
+        c4: { speaker: '? ? ?', line: t('有我和微积分，为什么还想要出去呢？', 'You have me and calculus here, why would you still want to go out?'), next: 'c4b' },
+        c4b: { speaker: '? ? ?', line: t('我觉得你还是更喜欢微积分吧......不要走神了。', "I think you actually like calculus more... don't get distracted."), next: 'c5' },
+        c5: {
+            speaker: '? ? ?',
+            line: t('说出你的答案。', 'Tell me your answer.'),
+            choices: [
+                { text: t('答案是 1/2', 'The answer is 1/2'), next: 'c5_correct' },
+                { text: t('答案是 1', 'The answer is 1'), next: 'c5_wrong' }
+            ]
+        },
+        c5_correct: { speaker: '? ? ?', line: t('你变得...更有吸引力了呢...', "You're becoming... more attractive to me..."), next: 'loop_next2', affection: 1 },
+        c5_wrong: { speaker: '? ? ?', line: t('你肯定会的，下次要加油啊', "I'm sure you'll get it. Try harder next time."), next: 'loop_next2', affection: -1 },
+
+        // 分支D：抗拒沉默
+        d1: { speaker: '? ? ?', line: t('不说话？', 'Not talking?'), next: 'd2' },
+        d2: { speaker: '? ? ?', line: t('（走近一步）在想什么呢', '(steps closer) What are you thinking about?'), next: 'd3' },
+        d3: { speaker: '? ? ?', line: t('这间教室只我，你，和微积分而已', 'In this classroom there is only me, you, and calculus.'), next: 'd4', affection: -2 },
+        d4: { speaker: '? ? ?', line: t('跟我们在一起不好嘛', "Isn't it nice being with us?"), next: 'd5' },
+        d5: {
+            speaker: '? ? ?',
+            line: t('说出你的答案。', 'Tell me your answer.'),
+            choices: [
+                { text: t('答案是 1/2', 'The answer is 1/2'), next: 'd5_correct' },
+                { text: t('答案是 1', 'The answer is 1'), next: 'd5_wrong' }
+            ]
+        },
+        d5_correct: { speaker: '? ? ?', line: t('你让我，更喜欢你了呢...', "You're making me like you even more..."), next: 'loop_next2', affection: 1 },
+        d5_wrong: { speaker: '? ? ?', line: t('你这是第二次让我失望了，是不是没有听老师的课啊。', "That's the second time you've disappointed me. Were you even listening to my lesson?"), next: 'loop_next2', affection: -2 },
+
+        // 两条分支汇合，进入第三场
+        loop_next2: { speaker: '? ? ?', line: t('第三题了，要是错了，老师可是会很生气的', 'Question three. If you get it wrong, your teacher will be very upset.'), next: 'n16' },
+
+        // ===== 第三场：第三题（病态独白，全程只有老师和你两个人）=====
+        n16: { speaker: '? ? ?', line: t('求 ∫ x·eˣ dx', 'Evaluate ∫ x·eˣ dx'), next: 'n17' },
+        n17: { speaker: '? ? ?', line: t('（忽然自语）你知道吗，这间教室，以前从来没有这么安静过。', '(muttering to himself) You know, this classroom has never been this quiet before.'), next: 'n18' },
+        n18: { speaker: '? ? ?', line: t('外面的走廊、楼下的操场、手机里那些乱七八糟的消息——', 'The hallway outside, the playground downstairs, all those messy notifications on your phone——'), next: 'n19' },
+        n19: { speaker: '? ? ?', line: t('都吵得很，都抢着要把你从我这里拿走。', "They're all so noisy, all fighting to take you away from me."), next: 'n20' },
+        n20: {
+            speaker: '? ? ?',
+            line: t('看你的反应，你是不是也这么觉得，外面比这里好？', 'Judging by your reaction, do you also think it is better out there than in here?'),
+            choices: [
+                { text: t('没有，这里挺好的。', "No, it's fine here."), next: 'e1' },
+                { text: t('外面当然比这里好。', "Of course it's better out there."), next: 'f1' }
+            ]
+        },
+
+        // 分支E：顺从
+        e1: { speaker: '? ? ?', line: t('（笑容扩大）这才对嘛。', "(smile widens) That's more like it."), next: 'e2', affection: 2 },
+        e2: { speaker: '? ? ?', line: t('外面的一切都是会变的，会走的，会骗你的。', 'Everything out there changes, leaves, lies to you.'), next: 'e3' },
+        e3: { speaker: '? ? ?', line: t('只有在这间教室里，只有我，和微积分，才会一直等你。', 'Only in this classroom, only me and calculus, will always wait for you.'), next: 'e4' },
+        e4: { speaker: '? ? ?', line: t('你跑不掉的', "You can't run."), next: 'e5' },
+        e5: {
+            speaker: '? ? ?',
+            line: t('说出你的答案。', 'Tell me your answer.'),
+            choices: [
+                { text: t('答案是 (x-1)eˣ + C', 'The answer is (x-1)eˣ + C'), next: 'e5_correct' },
+                { text: t('答案是 xeˣ + C', 'The answer is xeˣ + C'), next: 'e5_wrong' }
+            ]
+        },
+        e5_correct: { speaker: '? ? ?', line: t('很好，看来你已经开始明白了。', "Good, seems like you're starting to understand."), next: 'scene3_end' },
+        e5_wrong: { speaker: '? ? ?', line: t('为什么我那么努力教你，你还是不会呢', "I try so hard to teach you, why don't you get it yet?"), next: 'e5_wrong2', affection: -1 },
+        e5_wrong2: { speaker: '? ? ?', line: t('人再笨，也不至于连微积分都学不会吧？', 'No matter how slow someone is, surely they could learn calculus, right?'), next: 'scene3_end' },
+
+        // 分支F：直说
+        f1: { speaker: '? ? ?', line: t('（笑容僵住）外面比这里好？', '(smile freezes) Better out there?'), next: 'f2' },
+        f2: { speaker: '? ? ?', line: t('为什么！ 那些人，有一样会像我这样...', 'Why?! Would any of those people out there be like me...'), next: 'f3' },
+        f3: { speaker: '? ? ?', line: t('从你跑的第一秒就开始找你吗？', '...starting to search for you the very second you run?'), next: 'f4' },
+        f4: { speaker: '? ? ?', line: t('（逼近）没有谁会像我这样在乎你。', '(steps closer) No one will ever care about you the way I do.'), next: 'f5', affection: -2 },
+        f5: { speaker: '? ? ?', line: t('不过说实话，你跑来跑去的样子让我很有满足感呢', 'Honestly though, watching you run around like that gives me quite a bit of satisfaction.'), next: 'f6' },
+        f6: {
+            speaker: '? ? ?',
+            line: t('说出你的答案。', 'Tell me your answer.'),
+            choices: [
+                { text: t('答案是 (x-1)eˣ + C', 'The answer is (x-1)eˣ + C'), next: 'f6_correct' },
+                { text: t('答案是 xeˣ + C', 'The answer is xeˣ + C'), next: 'f6_wrong' }
+            ]
+        },
+        f6_correct: { speaker: '? ? ?', line: t('你越来越厉害了呢', "You're getting better and better."), next: 'scene3_end' },
+        f6_wrong: { speaker: '? ? ?', line: t('学不会微积分可不行啊，和老师一起，一起永远学微积分吧', "Not learning calculus just won't do. Stay with your teacher, and let's study calculus together forever."), next: 'scene3_end', affection: -3 },
+
+        // 两条分支汇合
+        scene3_end: { speaker: '? ? ?', line: t('时间过了好久了。', 'A long time has passed.'), next: 'scene3_end2' },
+        scene3_end2: {
+            speaker: '? ? ?',
+            dynamicNext: () => {
+                if (affection >= 8) return 'ending1_1';
+                if (affection >= 3) return 'ending2_1';
+                return 'ending3_1';
+            }
+        },
+
+        // ===== 结局一：永恒课堂（好感度 >= 8）=====
+        ending1_1: { speaker: '? ? ?', line: t('留下来吧', 'Stay.'), next: 'ending1_2' },
+        ending1_2: { speaker: '? ? ?', line: t('外面的世界好嘈杂，和这里比起来，只有你和我而已。', 'The outside world is so noisy. Compared to that, here there is only you and me.'), next: 'ending1_3' },
+        ending1_3: { speaker: '? ? ?', line: t('乖乖呆在我身边学微积分，不好吗？', "Why don't you just stay by my side and study calculus, isn't that nice?"), ending: true },
+
+        // ===== 结局二：无限循环（3 <= 好感度 < 8）=====
+        ending2_1: { speaker: '? ? ?', line: t('还差一点......', 'Just a little more...'), next: 'ending2_2' },
+        ending2_2: { speaker: '? ? ?', line: t('没关系，我们还有很多题可以做。', 'It is fine, we still have plenty of questions left to do.'), next: 'ending2_3' },
+        ending2_3: { speaker: '? ? ?', line: t('第四题，求......', 'Question four. Evaluate...'), next: 'n13', ending: true },
+
+        // ===== 结局三：下课（好感度 < 3）=====
+        ending3_1: { speaker: '? ? ?', line: t('（长久的沉默）', '(a long silence)'), next: 'ending3_2' },
+        ending3_2: { speaker: '? ? ?', line: t('你真的，一点都不喜欢我的课吗。', 'Do you really... not like my class at all?'), next: 'ending3_3' },
+        ending3_3: { speaker: '? ? ?', line: t('......那好吧。', '...Fine then.'), next: 'ending3_4' },
+        ending3_4: { speaker: '? ? ?', line: t('下课...', 'Class dismissed...'), next: 'ending3_5' },
+        ending3_5: { speaker: '? ? ?', line: t('不过......我会设计一个更好的课的。', "But... I'll design a better lesson next time."), ending: true }
+    };
+
+    let current = 'n1';
+    let affection = 7; // 好感度，以爱心数量显示
+    let lang = 'zh';
+    const history = [];
+    const visited = new Set();
+
+    const textEl = document.getElementById('text');
+    const speakerEl = document.getElementById('speaker');
+    const textbox = document.getElementById('textbox');
+    const choicesEl = document.getElementById('choices');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const affectionValueEl = document.getElementById('affectionValue');
+    const affectionLabelEl = document.getElementById('affectionLabel');
+    const langSwitch = document.getElementById('langSwitch');
+
+    const MAX_AFFECTION = 10;
+    const ENDING_LABEL = { zh: '—— 全剧终 ——', en: '—— THE END ——' };
+    const AFFECTION_LABEL = { zh: '好感度', en: 'Affection' };
+
+    function pick(textObj){
+        return textObj[lang] || textObj.zh;
+    }
+
+    function updateAffectionDisplay(){
+        const filled = Math.max(0, Math.min(MAX_AFFECTION, affection));
+        const empty = MAX_AFFECTION - filled;
+        affectionValueEl.innerHTML =
+            `<span class="heart-filled">${'❤'.repeat(filled)}</span>` +
+            `<span class="heart-empty">${'❤'.repeat(empty)}</span>`;
+        affectionLabelEl.textContent = AFFECTION_LABEL[lang];
+    }
+
+    function applyAffection(delta){
+        affection = Math.max(0, Math.min(10, affection + delta));
+        updateAffectionDisplay();
+    }
+
+    function renderNode(id, recordHistory = true){
+        if (recordHistory) history.push(current);
+        current = id;
+        const node = story[id];
+
+        if (recordHistory && node.affection && !visited.has(id)){
+            applyAffection(node.affection);
+        }
+        visited.add(id);
+
+        speakerEl.textContent = node.speaker;
+        const lineText = node.line ? pick(node.line) : '';
+        textEl.textContent = lineText + (node.ending ? ('\n\n' + ENDING_LABEL[lang]) : '');
+        choicesEl.innerHTML = '';
+
+        if (node.choices){
+            choicesEl.classList.remove('hidden');
+            nextBtn.disabled = true;
+            node.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.textContent = pick(choice.text);
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (choice.affection) applyAffection(choice.affection);
+                    renderNode(choice.next);
+                });
+                choicesEl.appendChild(btn);
+            });
+        } else {
+            choicesEl.classList.add('hidden');
+            nextBtn.disabled = !node.next && !node.dynamicNext;
+        }
+
+        prevBtn.disabled = history.length === 0;
+    }
+
+    function goNext(){
+        const node = story[current];
+        if (node.dynamicNext){
+            renderNode(node.dynamicNext());
+        } else if (node.next){
+            renderNode(node.next);
+        }
+    }
+
+    function goPrev(){
+        if (history.length === 0) return;
+        const last = history.pop();
+        renderNode(last, false);
+    }
+
+    function setLang(newLang){
+        if (lang === newLang) return;
+        lang = newLang;
+        langSwitch.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.lang === lang);
+        });
+        renderNode(current, false);
+    }
+
+    textbox.addEventListener('click', goNext);
+    nextBtn.addEventListener('click', (e) => { e.stopPropagation(); goNext(); });
+    prevBtn.addEventListener('click', (e) => { e.stopPropagation(); goPrev(); });
+    langSwitch.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const btn = e.target.closest('.lang-btn');
+        if (btn) setLang(btn.dataset.lang);
+    });
+
+    updateAffectionDisplay();
+    renderNode(current, false);
+</script>
+</html>
